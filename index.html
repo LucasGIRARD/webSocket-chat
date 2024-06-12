@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+	<style type="text/css">
+		.chat {
+			width: 230px;
+			position: relative;
+			border: 1px solid #000;
+		}
+		
+		.vote, div.makeVote {
+			position: absolute;
+			background-color: rgba(255,255,255,0.8);
+			top: 0;
+			left: 0;
+			right: 0;
+			padding: 4px;
+			opacity: 0;
+			transition: opacity 0.7s ease-out;
+			z-index: -1;
+		}
+
+		div.show {
+			opacity: 1;
+			z-index: unset;
+		}
+		
+		.makeVote .more {
+			text-align: right;
+		}
+
+
+		.vote .reponse:nth-child(1) {
+			display: none;
+		}
+		.vote .question {
+			padding: 10px;
+		}
+		.vote.result input {
+			display: none;
+		}
+		
+		.messages {
+			height: 400px;
+		}
+		.message:nth-child(odd) {
+			background-color: #ccc;
+		}
+
+		#message-0 {
+			display: none;
+		}
+
+		.message input {
+			margin: 0px;
+		}
+		.message > div {
+			float: right;
+		}		
+	</style>
+</head>
+<body>
+	<div class="chat">
+		<div class="action"><button class="makeVote">make a vote</button></div>
+		<div class="vote">
+			<div class="question"></div>
+			<div class="reponses">
+				<div class="reponse"><input type="radio" name=""><span class="text"></span><span class="result"></span></div>
+			</div>			
+		</div>
+		<div class="makeVote">
+			<div class="question"><input type="text" name="" placeholder="question"></div>
+			<div class="more"><button>+</button></div>
+			<div class="reponses">
+				<div class="reponse"><input type="text" name="" placeholder="proposition"></div>
+			</div>			
+			<button>SEND</button>
+		</div>
+		<div class="messages">
+			<div id="message-0" class="message"><span class="text">aaa</span> <div><input type="checkbox" name=""><span class="like">0</span></div></div>
+		</div>
+		<div class="send">
+			<input type="" name="" class="input">
+			<button>SEND</button>
+		</div>
+	</div>
+
+	<script type="text/javascript">
+		var conn = new WebSocket('ws://127.0.0.1:8080/room1');
+
+		function Json(str) {
+			try {
+				return JSON.parse(str);
+			} catch (e) {
+				return false;
+			}
+		}
+
+		conn.onmessage = function(e) {
+			var json = Json(e.data);
+			if (json != false) {
+				if (json.type == "vote") {
+					document.querySelector('.vote .question').innerHTML = json.question;
+					json.reponses.forEach(function(e){
+						var div = document.querySelector('.vote .reponse').cloneNode(true);
+						div.querySelector('.text').innerHTML = e;
+						document.querySelector('.vote .reponses').append(div);
+					});
+					document.querySelector('div.vote').classList.add('show');
+					document.querySelectorAll('.vote input').forEach(function(e){
+						e.onclick = function(){
+							vote = {type:'result',text:this.parentNode.querySelector('.text').innerHTML};
+							conn.send(JSON.stringify(vote));
+							document.querySelector('.vote').classList.add('result');
+						};
+					});
+				} else if (json.type == "result") {
+					document.querySelectorAll('.vote .reponse').forEach(function(e){
+						if (typeof json.results[e.querySelector('.text').innerHTML] != "undefined") {
+							e.querySelector('.result').innerHTML = json.results[e.querySelector('.text').innerHTML];
+						}
+					});
+				} else if (json.type == "like") {
+					document.querySelector('#message-'+json.id+' .like').innerHTML = json.like;
+				} else if (json.type == "message") {
+					var div = document.querySelector('#message-0').cloneNode(true);
+					div.id = 'message-'+json.id;
+					div.querySelector('.text').innerHTML = json.message;
+					document.querySelector('.messages').append(div);
+					setLikeTrigger(document.querySelector('#'+div.id+' input[type="checkbox"]'));
+				}
+			} else {
+				
+			}
+		};
+
+		document.querySelector('.send button').onclick = function(){
+			conn.send(document.querySelector('.input').value);
+			document.querySelector('.input').value = "";
+		};
+
+		document.querySelector('button.makeVote').onclick = function(){
+			document.querySelector('div.makeVote').classList.add('show');
+		};
+
+		document.querySelector('.more button').onclick = function(){
+			var div = document.querySelector('.makeVote .reponses .reponse').cloneNode(true);
+			div.querySelector('input').value = "";
+			document.querySelector('.makeVote .reponses').append(div);
+		};
+
+		document.querySelector('.makeVote > button').onclick = function(){
+			vote = {type:'vote',question:document.querySelector('.makeVote .question input').value, reponses:[]};
+			document.querySelectorAll('.makeVote .reponse input').forEach(function(e){
+				vote.reponses.push(e.value);
+			});
+			conn.send(JSON.stringify(vote));
+			document.querySelector('div.makeVote').classList.remove('show');
+			//reset maker
+		};
+
+		document.querySelectorAll('input[type="checkbox"]').forEach(function(e){
+			setLikeTrigger(e);
+		});
+
+		function setLikeTrigger(e) {
+			e.onclick = function(){
+				if (this.checked) {
+					type = 'like';
+				} else {
+					type = 'unlike';
+				}
+				conn.send(JSON.stringify({type:type,id:this.parentNode.parentNode.id.split('-')[1]}));
+			};
+		}
+
+		conn.onopen = function(e) {
+			//console.log("Connection established!");
+    		//conn.send('Hello World');
+    	};
+    </script>
+</body>
+</html>
